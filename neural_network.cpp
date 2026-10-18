@@ -216,26 +216,17 @@ public:
             layer.update(lr);
     }
 
-    // Полный цикл обучения: много эпох по всем примерам
-    void fit(const vector<vector<double>>& X,
-             const vector<vector<double>>& Y,
-             int epochs, double lr) {
-        for (int epoch = 1; epoch <= epochs; ++epoch) {
-            double total_error = 0.0;
-
-            for (size_t s = 0; s < X.size(); ++s) {
-                train_step(X[s], Y[s], lr);
-
-                // Считаем ошибку этого примера (MSE)
-                auto pred = forward(X[s]);
-                for (size_t k = 0; k < pred.size(); ++k)
-                    total_error += (Y[s][k] - pred[k]) * (Y[s][k] - pred[k]);
-            }
-
-            if (epoch % 1000 == 0 || epoch == 1)
-                cout << "Эпоха " << epoch << ", суммарная ошибка: "
-                     << total_error << "\n";
+    // Среднеквадратичная ошибка (MSE) сети на всём датасете.
+    // Прогоняем каждый пример через forward и суммируем (y - pred)^2.
+    double compute_loss(const vector<vector<double>>& X,
+                        const vector<vector<double>>& Y) {
+        double total_error = 0.0;
+        for (size_t s = 0; s < X.size(); ++s) {
+            auto pred = forward(X[s]);
+            for (size_t k = 0; k < pred.size(); ++k)
+                total_error += (Y[s][k] - pred[k]) * (Y[s][k] - pred[k]);
         }
+        return total_error;
     }
 };
 
@@ -250,8 +241,21 @@ int main() {
     // Архитектура: 2 входа -> 4 скрытых -> 1 выход
     NeuralNetwork nn({2, 4, 1});
 
+    const int epochs = 10000;    // сколько раз прогнать весь датасет
+    const double lr = 0.5;       // скорость обучения (шаг градиентного спуска)
+
     cout << "=== Обучение сети задаче XOR ===\n";
-    nn.fit(X, Y, /*epochs=*/10000, /*lr=*/0.5);
+
+    // Цикл обучения теперь живёт здесь, в main:
+    // на каждой эпохе обновляем веса по каждому примеру и считаем ошибку.
+    for (int epoch = 1; epoch <= epochs; ++epoch) {
+        for (size_t s = 0; s < X.size(); ++s)
+            nn.train_step(X[s], Y[s], lr);          // один шаг backprop
+
+        if (epoch % 1000 == 0 || epoch == 1)
+            cout << "Эпоха " << epoch << ", суммарная ошибка: "
+                 << nn.compute_loss(X, Y) << "\n";  // MSE по всему датасету
+    }
 
     cout << "\n=== Результаты после обучения ===\n";
     for (size_t i = 0; i < X.size(); ++i) {
